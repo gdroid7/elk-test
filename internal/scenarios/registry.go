@@ -12,6 +12,8 @@ type Meta struct {
 	BinPath     string `json:"bin_path"`
 }
 
+// registry is written only from init() functions (before ListenAndServe).
+// Reads from concurrent HTTP handlers are safe without locking.
 var registry = map[string]Meta{}
 
 func Register(m Meta) {

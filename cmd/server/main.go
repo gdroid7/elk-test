@@ -59,6 +59,11 @@ func scenariosHandler(w http.ResponseWriter, r *http.Request) {
 
 func runHandler(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	// validate id is safe for use in file paths
+	if !isValidScenarioID(id) {
+		http.Error(w, "invalid scenario id", 400)
+		return
+	}
 	meta, ok := scenarios.Get(id)
 	if !ok {
 		http.Error(w, "scenario not found", 404)
@@ -98,6 +103,7 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := exec.CommandContext(ctx, binPath, args...)
 
 	pr, pw := io.Pipe()
+	defer pr.Close()
 	cmd.Stdout = pw
 	cmd.Stderr = pw
 
@@ -113,18 +119,27 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := cmd.Start(); err != nil {
+		pw.CloseWithError(err)
 		fmt.Fprintf(w, "data: {\"error\":%q}\n\n", err.Error())
 		flusher.Flush()
 		return
 	}
 
 	go func() {
-		cmd.Wait()
-		pw.Close()
+		if err := cmd.Wait(); err != nil {
+			pw.CloseWithError(err)
+		} else {
+			pw.Close()
+		}
 	}()
 
 	scanner := bufio.NewScanner(pr)
 	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		line := scanner.Text()
 		if strings.TrimSpace(line) == "" {
 			continue
@@ -133,8 +148,24 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	}
 
+	if err := scanner.Err(); err != nil {
+		log.Printf("scenario %s exited with error: %v", id, err)
+		fmt.Fprintf(w, "data: {\"error\":%q}\n\n", err.Error())
+		flusher.Flush()
+		return
+	}
+
 	fmt.Fprintf(w, "data: [DONE]\n\n")
 	flusher.Flush()
+}
+
+func isValidScenarioID(id string) bool {
+	for _, c := range id {
+		if !((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-') {
+			return false
+		}
+	}
+	return len(id) > 0 && len(id) <= 64
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {

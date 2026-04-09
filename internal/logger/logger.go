@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -43,7 +44,9 @@ func New(cfg Config) *Logger {
 	if cfg.FilePath != "" {
 		var err error
 		f, err = os.OpenFile(cfg.FilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err == nil {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "logger: failed to open log file %s: %v\n", cfg.FilePath, err)
+		} else {
 			writers = append(writers, f)
 		}
 	}
@@ -80,9 +83,8 @@ func (l *Logger) timestamp() time.Time {
 
 func (l *Logger) log(level slog.Level, msg string, args ...any) {
 	l.mu.Lock()
+	defer l.mu.Unlock()
 	ts := l.timestamp()
-	l.mu.Unlock()
-
 	allArgs := append([]any{"time", ts.Format(time.RFC3339)}, args...)
 	l.handler.Log(nil, level, msg, allArgs...)
 }
