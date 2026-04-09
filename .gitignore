@@ -1,1 +1,4 @@
 .worktrees/
+bin/simulator
+bin/scenarios/
+logs/*.log

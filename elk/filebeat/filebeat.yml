@@ -1,0 +1,24 @@
+filebeat.inputs:
+- type: log
+  paths: [/var/log/app/sim-auth-brute-force.log]
+  fields: { log_type: sim-auth-brute-force }
+  fields_under_root: true
+- type: log
+  paths: [/var/log/app/sim-payment-decline.log]
+  fields: { log_type: sim-payment-decline }
+  fields_under_root: true
+- type: log
+  paths: [/var/log/app/sim-db-slow-query.log]
+  fields: { log_type: sim-db-slow-query }
+  fields_under_root: true
+- type: log
+  paths: [/var/log/app/sim-cache-stampede.log]
+  fields: { log_type: sim-cache-stampede }
+  fields_under_root: true
+- type: log
+  paths: [/var/log/app/sim-api-degradation.log]
+  fields: { log_type: sim-api-degradation }
+  fields_under_root: true
+
+output.logstash:
+  hosts: ["logstash:5044"]
