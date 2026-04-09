@@ -33,7 +33,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", indexHandler)
 	mux.HandleFunc("GET /api/scenarios", scenariosHandler)
-	mux.HandleFunc("POST /api/run/{id}", runHandler)
+	mux.HandleFunc("GET /api/run/{id}", runHandler)
 	mux.HandleFunc("GET /api/status", statusHandler)
 
 	addr := ":8080"
@@ -139,5 +139,5 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
 
 func statusHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "elk": "up"})
 }
