@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auth Attack Simulator — Live Demo</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f172a;color:#e2e8f0;font-family:monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+h1{font-size:1.4rem;color:#7dd3fc;margin-bottom:4px;text-align:center}
+.subtitle{font-size:0.8rem;color:#64748b;text-align:center;margin-bottom:28px}
+
+/* modal */
+#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:100}
+#modal{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:32px;width:340px;max-width:90vw;text-align:center}
+#modal h2{color:#7dd3fc;margin-bottom:8px;font-size:1.1rem}
+#modal p{color:#94a3b8;font-size:0.8rem;margin-bottom:20px}
+#modal input{width:100%;padding:10px 14px;background:#0f172a;border:1px solid #475569;border-radius:6px;color:#e2e8f0;font-family:monospace;font-size:1rem;outline:none;margin-bottom:14px}
+#modal input:focus{border-color:#7dd3fc}
+#modal button{width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-family:monospace;font-size:1rem;cursor:pointer}
+#modal button:hover{background:#1d4ed8}
+
+/* info card */
+.info-card{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:16px 24px;margin-bottom:24px;width:100%;max-width:560px;display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+.info-item{text-align:center}
+.info-label{font-size:0.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.info-value{font-size:0.95rem;color:#7dd3fc;font-weight:bold}
+
+/* action buttons */
+.actions{display:flex;gap:14px;margin-bottom:28px;flex-wrap:wrap;justify-content:center}
+.btn{padding:14px 28px;border:none;border-radius:8px;font-family:monospace;font-size:1rem;cursor:pointer;font-weight:bold;transition:transform .1s,box-shadow .1s;min-width:180px}
+.btn:active{transform:scale(.97)}
+.btn-valid{background:#16a34a;color:#fff}
+.btn-valid:hover{background:#15803d;box-shadow:0 0 20px rgba(22,163,74,.4)}
+.btn-brute{background:#dc2626;color:#fff}
+.btn-brute:hover{background:#b91c1c;box-shadow:0 0 20px rgba(220,38,38,.4)}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* log output */
+.output-wrap{width:100%;max-width:700px}
+.output-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.output-hdr span{font-size:0.8rem;color:#94a3b8}
+.clear-btn{background:#1e293b;border:1px solid #334155;color:#94a3b8;font-family:monospace;font-size:0.75rem;padding:3px 10px;border-radius:4px;cursor:pointer}
+.clear-btn:hover{background:#334155}
+#output{background:#020917;border:1px solid #1e293b;border-radius:8px;padding:14px;min-height:120px;max-height:420px;overflow-y:auto;font-size:0.76rem;line-height:1.7}
+.entry{border-bottom:1px solid #0f172a;padding:3px 0;animation:fadein .3s ease}
+@keyframes fadein{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+.log-INFO {color:#4ade80}
+.log-WARN {color:#fbbf24}
+.log-ERROR{color:#f87171}
+.log-fields{color:#94a3b8;font-size:0.72rem}
+
+/* status + kibana link */
+.footer{margin-top:24px;display:flex;flex-direction:column;align-items:center;gap:10px}
+.kibana-btn{padding:8px 20px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-family:monospace;font-size:0.85rem;cursor:pointer;text-decoration:none}
+.kibana-btn:hover{background:#6d28d9}
+#status-msg{font-size:0.75rem;color:#64748b;min-height:18px;text-align:center}
+</style>
+</head>
+<body>
+
+<!-- Name modal -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>Auth Attack Simulator</h2>
+    <p>You'll appear as a real user in our Kibana dashboard.<br>Enter your name to get started.</p>
+    <input type="text" id="name-input" placeholder="Your name" maxlength="32" autocomplete="off">
+    <button onclick="saveName()">Enter →</button>
+  </div>
+</div>
+
+<h1>🔐 Auth Attack Simulator</h1>
+<p class="subtitle">Your actions flow into Elasticsearch in real time</p>
+
+<!-- Info strip -->
+<div class="info-card">
+  <div class="info-item">
+    <div class="info-label">You are</div>
+    <div class="info-value" id="display-name">—</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Your IP</div>
+    <div class="info-value" id="display-ip">detecting…</div>
+  </div>
+  <div class="info-item">
+    <div class="info-label">Location</div>
+    <div class="info-value" id="display-location">—</div>
+  </div>
+</div>
+
+<!-- Action buttons -->
+<div class="actions">
+  <button class="btn btn-valid" id="btn-valid" onclick="simulate(true)">✓ Valid Login</button>
+  <button class="btn btn-brute" id="btn-brute" onclick="simulate(false)">✗ Brute Force Attack</button>
+</div>
+
+<!-- Output -->
+<div class="output-wrap">
+  <div class="output-hdr">
+    <span id="output-label">Log output will appear here</span>
+    <button class="clear-btn" onclick="clearOutput()">Clear</button>
+  </div>
+  <div id="output"></div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <div id="status-msg"></div>
+  <a class="kibana-btn" href="http://localhost:5601/app/dashboards#/view/sim-auth-brute-force-dashboard" target="_blank">
+    📊 View Kibana Dashboard
+  </a>
+</div>
+
+<script>
+const userName = () => localStorage.getItem('demo_name') || '';
+
+function saveName() {
+  const v = document.getElementById('name-input').value.trim();
+  if (!v) return;
+  if (!/^[a-zA-Z0-9 _-]{1,32}$/.test(v)) {
+    document.getElementById('name-input').placeholder = 'Letters, numbers, spaces only';
+    return;
+  }
+  localStorage.setItem('demo_name', v);
+  document.getElementById('display-name').textContent = v;
+  document.getElementById('modal-overlay').style.display = 'none';
+  loadGeo();
+}
+
+document.getElementById('name-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveName();
+});
+
+async function loadGeo() {
+  try {
+    const r = await fetch('/api/demo/myip');
+    const d = await r.json();
+    document.getElementById('display-ip').textContent = d.ip || '—';
+    const loc = [d.city, d.country].filter(Boolean).join(', ') || '—';
+    document.getElementById('display-location').textContent = loc;
+  } catch {
+    document.getElementById('display-ip').textContent = 'unknown';
+  }
+}
+
+async function simulate(valid) {
+  const name = userName();
+  if (!name) { document.getElementById('modal-overlay').style.display='flex'; return; }
+
+  const btnV = document.getElementById('btn-valid');
+  const btnB = document.getElementById('btn-brute');
+  btnV.disabled = true; btnB.disabled = true;
+
+  const label = document.getElementById('output-label');
+  label.textContent = valid ? 'Simulating valid login…' : 'Simulating brute force attack…';
+  setStatus('Sending to ELK pipeline…');
+
+  try {
+    const url = `/api/demo/auth?name=${encodeURIComponent(name)}&valid=${valid}`;
+    const res = await fetch(url, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.text();
+      setStatus('Error: ' + err);
+      return;
+    }
+    const entries = await res.json();
+    renderEntries(entries);
+    label.textContent = `${entries.length} log line${entries.length !== 1 ? 's' : ''} sent → Elasticsearch`;
+    setStatus('✓ Logs flowing through Filebeat → Logstash → ES. Check Kibana in ~15s.');
+  } catch (e) {
+    setStatus('Request failed: ' + e.message);
+  } finally {
+    btnV.disabled = false; btnB.disabled = false;
+  }
+}
+
+function renderEntries(entries) {
+  const out = document.getElementById('output');
+  entries.forEach((e, i) => {
+    setTimeout(() => {
+      const div = document.createElement('div');
+      div.className = 'entry';
+
+      const lvlClass = ['INFO','WARN','ERROR'].includes(e.level) ? 'log-' + e.level : 'log-INFO';
+      const time = e.time || '';
+      const msg = e.msg || '';
+
+      // build field list (skip level/msg/time/scenario)
+      const skip = new Set(['level','msg','time','scenario']);
+      const fields = Object.entries(e)
+        .filter(([k]) => !skip.has(k))
+        .map(([k,v]) => `<span style="color:#7dd3fc">${k}</span>=<span style="color:#e2e8f0">${v}</span>`)
+        .join('  ');
+
+      div.innerHTML =
+        `<span class="${lvlClass}">[${e.level}]</span> ` +
+        `<span style="color:#475569">${time.slice(11,19)}</span> ` +
+        `<span style="color:#f8fafc;font-weight:bold">${msg}</span><br>` +
+        `<span class="log-fields">        ${fields}</span>`;
+
+      out.appendChild(div);
+      out.scrollTop = out.scrollHeight;
+    }, i * 120);
+  });
+}
+
+function clearOutput() {
+  document.getElementById('output').innerHTML = '';
+  document.getElementById('output-label').textContent = 'Log output will appear here';
+  setStatus('');
+}
+
+function setStatus(msg) {
+  document.getElementById('status-msg').textContent = msg;
+}
+
+// init
+if (userName()) {
+  document.getElementById('display-name').textContent = userName();
+  document.getElementById('modal-overlay').style.display = 'none';
+  loadGeo();
+} else {
+  document.getElementById('name-input').focus();
+}
+</script>
+</body>
+</html>
