@@ -14,7 +14,10 @@ func main() {
 	logFile := flag.String("log-file", "", "log file path (optional)")
 	flag.Parse()
 
-	loc, _ := time.LoadLocation(*tz)
+	loc, err := time.LoadLocation(*tz)
+	if err != nil {
+		loc = time.UTC
+	}
 	log := logger.New(logger.Config{
 		FilePath:   *logFile,
 		TZ:         loc,
