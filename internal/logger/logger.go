@@ -54,8 +54,8 @@ func New(cfg Config) *Logger {
 	w := io.MultiWriter(writers...)
 	h := slog.NewJSONHandler(w, &slog.HandlerOptions{
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-			if a.Key == slog.TimeKey {
-				return slog.Attr{} // we inject time manually
+			if a.Key == slog.TimeKey && a.Value.Kind() == slog.KindTime {
+				return slog.Attr{} // remove built-in time; we inject our own string-formatted time
 			}
 			if a.Key == slog.LevelKey {
 				return slog.Attr{Key: "level", Value: slog.StringValue(a.Value.String())}
