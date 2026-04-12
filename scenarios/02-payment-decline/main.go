@@ -48,7 +48,6 @@ func runScenario(log *logger.Logger, compress bool) {
 
 	log.Error("Payment declined",
 		"scenario", "payment-decline",
-		"user_id", "USR-2011",
 		"order_id", "ORD-8801",
 		"amount", 149.99,
 		"gateway", "stripe",
@@ -58,7 +57,6 @@ func runScenario(log *logger.Logger, compress bool) {
 
 	log.Error("Payment declined",
 		"scenario", "payment-decline",
-		"user_id", "USR-3042",
 		"order_id", "ORD-8802",
 		"amount", 299.00,
 		"gateway", "stripe",
@@ -68,7 +66,6 @@ func runScenario(log *logger.Logger, compress bool) {
 
 	log.Error("Payment declined",
 		"scenario", "payment-decline",
-		"user_id", "USR-4109",
 		"order_id", "ORD-8803",
 		"amount", 59.99,
 		"gateway", "paypal",
@@ -78,7 +75,6 @@ func runScenario(log *logger.Logger, compress bool) {
 
 	log.Error("Payment declined",
 		"scenario", "payment-decline",
-		"user_id", "USR-5503",
 		"order_id", "ORD-8804",
 		"amount", 899.00,
 		"gateway", "stripe",
@@ -88,7 +84,6 @@ func runScenario(log *logger.Logger, compress bool) {
 
 	log.Error("Payment declined",
 		"scenario", "payment-decline",
-		"user_id", "USR-6071",
 		"order_id", "ORD-8805",
 		"amount", 12.50,
 		"gateway", "stripe",
@@ -98,7 +93,6 @@ func runScenario(log *logger.Logger, compress bool) {
 
 	log.Error("Payment declined",
 		"scenario", "payment-decline",
-		"user_id", "USR-7234",
 		"order_id", "ORD-8806",
 		"amount", 450.00,
 		"gateway", "paypal",

@@ -21,7 +21,7 @@ func init() {
 		LogCount:        9,
 		Index:           "sim-payment-decline",
 		BinPath:         "bin/scenarios/payment-decline",
-		DiscoverColumns: []string{"level", "msg", "transaction_id", "amount", "error_code", "gateway"},
+		DiscoverColumns: []string{"level", "msg", "order_id", "amount", "error_code", "gateway"},
 	})
 	scenarios.Register(scenarios.Meta{
 		ID:              "db-slow-query",
