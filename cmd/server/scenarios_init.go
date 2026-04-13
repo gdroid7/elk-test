@@ -12,6 +12,8 @@ func init() {
 		Index:           "sim-auth-brute-force",
 		BinPath:         "scenarios/01-auth-brute-force",
 		DiscoverColumns: []string{"level", "msg", "user_id", "ip_address", "attempt_count", "error_code"},
+		DashboardID:     "01-dashboard",
+		IndexPatternID:  "01-index-pattern",
 	})
 	scenarios.Register(scenarios.Meta{
 		ID:              "payment-decline",
@@ -22,6 +24,8 @@ func init() {
 		Index:           "sim-payment-decline",
 		BinPath:         "scenarios/02-payment-decline",
 		DiscoverColumns: []string{"level", "msg", "order_id", "amount", "error_code", "gateway"},
+		DashboardID:     "02-dashboard",
+		IndexPatternID:  "02-index-pattern",
 	})
 	scenarios.Register(scenarios.Meta{
 		ID:              "db-slow-query",

@@ -11,6 +11,8 @@ type Meta struct {
 	Index            string   `json:"index"`
 	BinPath          string   `json:"bin_path"`
 	DiscoverColumns  []string `json:"discover_columns"`
+	DashboardID      string   `json:"dashboard_id"`
+	IndexPatternID   string   `json:"index_pattern_id"`
 }
 
 // registry is written only from init() functions (before ListenAndServe).

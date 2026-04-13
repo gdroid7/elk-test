@@ -62,11 +62,12 @@ main { padding: 24px; max-width: 1200px; margin: 0 auto; }
 let activeES = null;
 
 function discoverUrl(s) {
+  if (!s.index_pattern_id) return 'http://localhost:5601/app/discover';
   const cols = (s.discover_columns && s.discover_columns.length)
     ? s.discover_columns
     : ['level', 'msg'];
-  const colsRison = '!(' + cols.join(',') + ')';
-  const a = encodeURIComponent(`(columns:${colsRison},index:'${s.index}*')`);
+  const colsRison = '!(' + cols.map(c => "'" + c + "'").join(',') + ')';
+  const a = encodeURIComponent(`(columns:${colsRison},index:'${s.index_pattern_id}')`);
   const g = encodeURIComponent('(refreshInterval:(pause:!t,value:0),time:(from:now-2h,to:now))');
   return `http://localhost:5601/app/discover#/?_a=${a}&_g=${g}`;
 }
@@ -96,7 +97,7 @@ async function loadScenarios() {
         <button class="btn btn-run" id="run-${s.id}" onclick="runScenario('${s.id}')">&#9654; Run</button>
       </div>
       <div class="card-links">
-        <a class="btn-sm" href="http://localhost:5601/app/dashboards#/view/sim-${s.id}-dashboard" target="_blank">Dashboard</a>
+        <a class="btn-sm" href="${s.dashboard_id ? 'http://localhost:5601/app/dashboards#/view/' + s.dashboard_id : '#'}" target="_blank" ${!s.dashboard_id ? 'style="opacity:0.4;pointer-events:none"' : ''}>Dashboard</a>
         <a class="btn-sm" href="${discoverUrl(s)}" target="_blank">Discover</a>
       </div>
     `;
