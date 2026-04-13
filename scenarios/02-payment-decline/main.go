@@ -18,13 +18,17 @@ func main() {
 	if err != nil {
 		loc = time.UTC
 	}
+	startTime := time.Now().In(loc)
+	if *compressTime {
+		startTime = startTime.Add(-*timeWindow)
+	}
 	log := logger.New(logger.Config{
 		FilePath:   *logFile,
 		TZ:         loc,
 		Compress:   *compressTime,
 		TimeWindow: *timeWindow,
 		LogCount:   9,
-		StartTime:  time.Now().In(loc),
+		StartTime:  startTime,
 	})
 
 	runScenario(log, *compressTime)

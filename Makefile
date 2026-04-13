@@ -4,6 +4,7 @@ run:
 	go run ./cmd/server
 
 elk-up:
+	mkdir -p logs
 	docker compose up -d elasticsearch kibana logstash filebeat
 
 elk-down:

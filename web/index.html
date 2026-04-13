@@ -64,10 +64,11 @@ let activeES = null;
 function discoverUrl(s) {
   if (!s.index_pattern_id) return 'http://localhost:5601/app/discover';
   const cols = (s.discover_columns && s.discover_columns.length)
-    ? s.discover_columns
-    : ['level', 'msg'];
+    ? s.discover_columns : ['level', 'msg'];
   const colsRison = '!(' + cols.map(c => "'" + c + "'").join(',') + ')';
-  const a = encodeURIComponent(`(columns:${colsRison},index:'${s.index_pattern_id}')`);
+  const dataSource = `dataSource:(dataViewId:'${s.index_pattern_id}',type:dataView)`;
+  const query = `query:(language:kuery,query:'scenario:%20%22${s.id}%22')`;
+  const a = encodeURIComponent(`(columns:${colsRison},${dataSource},${query},sort:!(!('@timestamp',desc)))`);
   const g = encodeURIComponent('(refreshInterval:(pause:!t,value:0),time:(from:now-2h,to:now))');
   return `http://localhost:5601/app/discover#/?_a=${a}&_g=${g}`;
 }
