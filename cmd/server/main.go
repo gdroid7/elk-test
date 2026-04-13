@@ -98,7 +98,7 @@ func runHandler(w http.ResponseWriter, r *http.Request) {
 	info, err := os.Stat(binPath)
 	var cmd *exec.Cmd
 	if err == nil && info.IsDir() {
-		cmd = exec.CommandContext(ctx, "go", append([]string{"run", binPath}, args...)...)
+		cmd = exec.CommandContext(ctx, "go", append([]string{"run", "./" + binPath}, args...)...)
 	} else {
 		cmd = exec.CommandContext(ctx, binPath, args...)
 	}
