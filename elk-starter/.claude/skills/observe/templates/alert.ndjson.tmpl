@@ -1,0 +1,53 @@
+# Alert rule template — Kibana 8.12 REST API format (POST /api/alerting/rule)
+# Variables: TITLE, APP_NAME, CHECK_INTERVAL, QUERY_FILTERS_JSON, TIME_WINDOW_SIZE,
+#            TIME_WINDOW_UNIT, COMPARATOR, THRESHOLD, CONNECTOR_ID, SLACK_MESSAGE_ESCAPED
+# COMPARATOR options: >, >=, <, <=, ==
+# TIME_WINDOW_UNIT options: s, m, h
+# CHECK_INTERVAL examples: "1m", "5m"
+#
+# File: <slug>-alert.json (used with: curl -d @<slug>-alert.json)
+{
+  "name": "{{TITLE}}",
+  "rule_type_id": ".es-query",
+  "consumer": "alerts",
+  "enabled": true,
+  "tags": ["{{APP_NAME}}", "observe"],
+  "schedule": {"interval": "{{CHECK_INTERVAL}}"},
+  "actions": [
+    {
+      "group": "query matched",
+      "id": "{{CONNECTOR_ID}}",
+      "params": {
+        "subAction": "run",
+        "subActionParams": {
+          "body": "{\"text\":\"{{SLACK_MESSAGE_ESCAPED}}\"}"
+        }
+      }
+    }
+  ],
+  "params": {
+    "index": ["logs-{{APP_NAME}}-*"],
+    "timeField": "@timestamp",
+    "esQuery": "{\"query\":{\"bool\":{\"filter\":[{{QUERY_FILTERS_JSON}}]}}}",
+    "timeWindowSize": {{TIME_WINDOW_SIZE}},
+    "timeWindowUnit": "{{TIME_WINDOW_UNIT}}",
+    "thresholdComparator": "{{COMPARATOR}}",
+    "threshold": [{{THRESHOLD}}],
+    "size": 100
+  }
+}
+
+# Slack webhook connector — Kibana 8.12 REST API format
+# (POST /api/actions/connector — returns {id} to use as CONNECTOR_ID above)
+# File: <slug>-slack-connector.json
+{
+  "name": "Slack - {{APP_NAME}}",
+  "connector_type_id": ".webhook",
+  "config": {
+    "method": "POST",
+    "url": "{{SLACK_WEBHOOK_URL}}",
+    "headers": {"Content-Type": "application/json"},
+    "hasAuth": false
+  },
+  "secrets": {}
+}
