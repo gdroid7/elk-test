@@ -7,10 +7,11 @@
 
 ## Overview
 
-Two Kiro agents + one hook, self-contained in `.kiro/`. Drop into any repo with a log file to get a full ELK stack with Kibana dashboards.
+Three Kiro agents + one hook, self-contained in `.kiro/`. Drop into any repo with a log file to get a full ELK stack with Kibana dashboards.
 
 - `elk-setup` — installs tools, discovers logs, writes config, starts stack, generates README
 - `kibana-agent` — standalone: plain English → Kibana dashboard + demo script
+- `elk-debugger` — standalone: verifies filebeat → logstash → elasticsearch pipeline, pinpoints where logs are dropping
 - `elk-commit` hook — prompts commit/push after any ELK file is written
 
 Scenarios, Go simulator, and demo scripts from this repo are **out of scope**.
@@ -23,7 +24,8 @@ Scenarios, Go simulator, and demo scripts from this repo are **out of scope**.
 .kiro/
 ├── agents/
 │   ├── elk-setup.md          # main setup agent
-│   └── kibana-agent.md       # standalone kibana agent
+│   ├── kibana-agent.md       # standalone kibana agent
+│   └── elk-debugger.md       # standalone pipeline debugger
 └── hooks/
     └── elk-commit.md         # post-write commit/push prompt
 
@@ -138,6 +140,54 @@ No alerts in demo scope.
 
 ---
 
+## `elk-debugger` Agent Flow
+
+Standalone — works any time. Checks each hop in the pipeline independently.
+
+```
+1. READ .env → APP_NAME, LOG_PATH, LOG_FORMAT
+   → if missing: "Run elk-setup first"
+
+2. CHECK CONTAINERS (docker compose ps)
+   → report status for each: elasticsearch, kibana, logstash, filebeat
+   → if any down: "Container <name> not running. Run: make up" → stop
+
+3. CHECK FILEBEAT → LOGSTASH
+   → docker compose logs filebeat --tail=50
+   → look for: "Connecting to Logstash", "Events sent", harvester errors
+   → report: "Filebeat OK" or specific error line
+
+4. CHECK LOGSTASH → ELASTICSEARCH
+   → docker compose logs logstash --tail=50
+   → look for: pipeline started, codec errors, ES connection refused
+   → curl localhost:9600/_node/stats → check events.in / events.out
+   → report delta: "Logstash received N, sent M" (flag if M < N)
+
+5. CHECK ELASTICSEARCH INDEX
+   → curl localhost:9200/logs-<APP_NAME>-*/_count
+   → if count = 0: "Index exists but no docs" → flag as pipeline break
+   → if index missing: "Index not created yet — no logs ingested"
+   → if count > 0: "ES has N docs ✓"
+
+6. CHECK LOG FILE
+   → verify LOG_PATH exists + not empty
+   → tail last 3 lines → show to user
+   → if empty: "Log file is empty — no data to ship"
+
+7. REPORT SUMMARY
+   → show pass/fail per hop:
+     Log file → Filebeat → Logstash → Elasticsearch
+   → pinpoint first failing hop
+   → give one specific fix command for that hop
+
+8. OFFER: "Want me to tail live logs for 10s to watch the pipeline?"
+   → yes → docker compose logs -f filebeat logstash --tail=5 (10s timeout)
+```
+
+Never modifies config. Read-only + curl only.
+
+---
+
 ## `elk-commit` Hook
 
 Trigger: Kiro `userMessage` event after elk-setup or kibana-agent completes. Hook checks `git status` to detect written files and prompts only if changes exist.
@@ -202,4 +252,5 @@ KIBANA_PORT=5601
 - Runs elk-setup agent → answers ~4 questions → stack running in ~60s
 - Runs kibana-agent → describes chart → dashboard imported in <2min
 - Runs `bash elk/demo-logs.sh` → sees data in Kibana within 10s
+- Runs elk-debugger → pipeline status reported per hop, failing hop identified
 - `elk-commit` hook prompts commit → config committed + pushed
