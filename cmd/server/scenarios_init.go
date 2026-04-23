@@ -39,26 +39,26 @@ func init() {
 		DashboardID:     "03-dashboard",
 		IndexPatternID:  "03-index-pattern",
 	})
-	scenarios.Register(scenarios.Meta{
-		ID:              "cache-stampede",
-		Name:            "Cache Stampede",
-		Description:     "Cache TTL expires simultaneously, all requests flood DB.",
-		DurationSec:     7,
-		LogCount:        12,
-		Index:           "sim-cache-stampede",
-		BinPath:         "scenarios/04-cache-stampede",
-		DiscoverColumns: []string{"level", "msg", "cache_key", "hit", "db_calls", "latency_ms"},
-		IndexPatternID:  "04-index-pattern",
-	})
-	scenarios.Register(scenarios.Meta{
-		ID:              "api-degradation",
-		Name:            "API Degradation",
-		Description:     "Upstream service degrades: latency spikes then 5xx errors.",
-		DurationSec:     10,
-		LogCount:        10,
-		Index:           "sim-api-degradation",
-		BinPath:         "scenarios/05-api-degradation",
-		DiscoverColumns: []string{"level", "msg", "endpoint", "status_code", "latency_ms", "error_code"},
-		IndexPatternID:  "05-index-pattern",
-	})
+	// scenarios.Register(scenarios.Meta{
+	// 	ID:              "cache-stampede",
+	// 	Name:            "Cache Stampede",
+	// 	Description:     "Cache TTL expires simultaneously, all requests flood DB.",
+	// 	DurationSec:     7,
+	// 	LogCount:        12,
+	// 	Index:           "sim-cache-stampede",
+	// 	BinPath:         "scenarios/04-cache-stampede",
+	// 	DiscoverColumns: []string{"level", "msg", "cache_key", "hit", "db_calls", "latency_ms"},
+	// 	IndexPatternID:  "04-index-pattern",
+	// })
+	// scenarios.Register(scenarios.Meta{
+	// 	ID:              "api-degradation",
+	// 	Name:            "API Degradation",
+	// 	Description:     "Upstream service degrades: latency spikes then 5xx errors.",
+	// 	DurationSec:     10,
+	// 	LogCount:        10,
+	// 	Index:           "sim-api-degradation",
+	// 	BinPath:         "scenarios/05-api-degradation",
+	// 	DiscoverColumns: []string{"level", "msg", "endpoint", "status_code", "latency_ms", "error_code"},
+	// 	IndexPatternID:  "05-index-pattern",
+	// })
 }

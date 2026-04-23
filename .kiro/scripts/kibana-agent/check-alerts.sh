@@ -10,6 +10,7 @@ HISTORY_FILE=".kiro/data/kibana-agent/alert-history.log"
 
 [ ! -f "$ALERTS_FILE" ] && echo "No alerts configured" && exit 0
 [ -z "$ES_URL" ] && echo "Error: ES_URL not set" && exit 1
+SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-$SLACK_INCOMING_WEBHOOK_URL}"
 [ -z "$SLACK_WEBHOOK_URL" ] && echo "Error: SLACK_WEBHOOK_URL not set" && exit 1
 
 ALERTS=$(jq -c '.[] | select(.enabled == true)' "$ALERTS_FILE")
@@ -24,32 +25,27 @@ echo "$ALERTS" | while IFS= read -r alert; do
   OPERATOR=$(echo "$alert" | jq -r '.operator')
   INDEX=$(echo "$alert" | jq -r '.index')
 
-  QUERY="{\"query\":{\"match_all\":{}},\"aggs\":{\"metric_value\":{\"sum\":{\"field\":\"$METRIC\"}}}}"
+  QUERY="{\"query\":{\"range\":{\"$METRIC\":{\"gt\":$THRESHOLD}}},\"size\":10,\"sort\":[{\"@timestamp\":{\"order\":\"desc\"}}]}"
   
   RESULT=$(curl -s -u "$ES_USER:$ES_PASSWORD" \
-    "$ES_URL/$INDEX/_search?size=0" \
+    "$ES_URL/$INDEX/_search" \
     -H "Content-Type: application/json" \
     -d "$QUERY")
 
-  VALUE=$(echo "$RESULT" | jq -r '.aggregations.metric_value.value // 0')
+  HITS=$(echo "$RESULT" | jq -r '.hits.hits | length')
 
-  TRIGGERED=false
-  case "$OPERATOR" in
-    gt) [ "$(echo "$VALUE > $THRESHOLD" | bc -l)" -eq 1 ] && TRIGGERED=true ;;
-    lt) [ "$(echo "$VALUE < $THRESHOLD" | bc -l)" -eq 1 ] && TRIGGERED=true ;;
-    gte) [ "$(echo "$VALUE >= $THRESHOLD" | bc -l)" -eq 1 ] && TRIGGERED=true ;;
-    lte) [ "$(echo "$VALUE <= $THRESHOLD" | bc -l)" -eq 1 ] && TRIGGERED=true ;;
-  esac
-
-  if [ "$TRIGGERED" = true ]; then
+  if [ "$HITS" -gt 0 ]; then
     TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-    MESSAGE="🚨 Alert: $NAME\nMetric: $METRIC = $VALUE\nThreshold: $OPERATOR $THRESHOLD\nTime: $TIMESTAMP"
+    
+    DETAILS=$(echo "$RESULT" | jq -r '.hits.hits[0:3] | map("• Duration: \(._source.duration_ms)ms | Table: \(._source.table // "N/A") | Query: \(._source.query_type // "N/A") | Message: \(._source.app_message // "N/A")") | join("\n")')
+    
+    MESSAGE="🚨 *Alert: $NAME*\n*Threshold Breached:* $METRIC > ${THRESHOLD}ms\n*Total Violations:* $HITS queries\n*Time:* $TIMESTAMP\n\n*Recent Slow Queries:*\n$DETAILS"
     
     curl -s -X POST "$SLACK_WEBHOOK_URL" \
       -H "Content-Type: application/json" \
       -d "{\"text\":\"$MESSAGE\"}" > /dev/null
 
-    echo "[$TIMESTAMP] Alert triggered: $NAME ($ID) - $METRIC=$VALUE $OPERATOR $THRESHOLD" >> "$HISTORY_FILE"
-    echo "Alert triggered: $NAME"
+    echo "[$TIMESTAMP] Alert triggered: $NAME ($ID) - $HITS queries exceeded $THRESHOLD" >> "$HISTORY_FILE"
+    echo "Alert triggered: $NAME ($HITS violations)"
   fi
 done
