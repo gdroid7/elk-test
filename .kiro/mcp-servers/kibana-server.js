@@ -20,18 +20,124 @@ const KIBANA_URL = process.env.KIBANA_URL;
 const KIBANA_USER = process.env.KIBANA_USER;
 const KIBANA_PASSWORD = process.env.KIBANA_PASSWORD;
 
-async function discoverFields(indexPattern = '*') {
-  const url = `${ES_URL}/${indexPattern}/_mapping`;
-  const auth = Buffer.from(`${ES_USER}:${ES_PASSWORD}`).toString('base64');
+function buildCurlAuth() {
+  if (ES_USER && ES_PASSWORD) {
+    const auth = Buffer.from(`${ES_USER}:${ES_PASSWORD}`).toString('base64');
+    return `-H "Authorization: Basic ${auth}"`;
+  }
+  return '';
+}
+
+function buildKibanaCurlAuth() {
+  if (KIBANA_USER && KIBANA_PASSWORD) {
+    const auth = Buffer.from(`${KIBANA_USER}:${KIBANA_PASSWORD}`).toString('base64');
+    return `-H "Authorization: Basic ${auth}"`;
+  }
+  return '';
+}
+
+async function getDataViewId(indexPattern) {
+  const auth = buildKibanaCurlAuth();
+  const { stdout } = await execAsync(
+    `curl -s ${auth} "${KIBANA_URL}/api/data_views" -H "kbn-xsrf: true" | jq -r '.data_view[] | select(.name == "${indexPattern}") | .id'`
+  );
+  const dataViewId = stdout.trim();
+  if (!dataViewId) {
+    throw new Error(`Data view not found for index pattern: ${indexPattern}. Please create it in Kibana first.`);
+  }
+  return dataViewId;
+}
+
+async function createDataView(indexPattern, timeField = '@timestamp') {
+  const auth = buildKibanaCurlAuth();
+  
+  // Check if it already exists
+  try {
+    const existingId = await getDataViewId(indexPattern);
+    return `Data view already exists with ID: ${existingId}`;
+  } catch (e) {
+    // Doesn't exist, create it
+  }
+  
+  const dataViewConfig = {
+    data_view: {
+      title: indexPattern,
+      name: indexPattern,
+      timeFieldName: timeField
+    }
+  };
   
   const { stdout } = await execAsync(
-    `curl -s -H "Authorization: Basic ${auth}" "${url}" | jq -r 'to_entries[] | .value.mappings.properties // {} | to_entries[] | "- \\(.key) (\\(.value.type // \\"object\\"))"' | sort -u`
+    `curl -s -X POST ${auth} "${KIBANA_URL}/api/data_views/data_view" -H "kbn-xsrf: true" -H "Content-Type: application/json" -d '${JSON.stringify(dataViewConfig)}'`
   );
   
+  const result = JSON.parse(stdout);
+  if (result.data_view) {
+    return `Data view created successfully with ID: ${result.data_view.id}`;
+  } else {
+    throw new Error(`Failed to create data view: ${JSON.stringify(result)}`);
+  }
+}
+
+async function listIndices(pattern = '*') {
+  const auth = buildCurlAuth();
+  const { stdout } = await execAsync(
+    `curl -s ${auth} "${ES_URL}/_cat/indices/${pattern}?h=index&s=index" | grep -v "^\\." | sort -u`
+  );
   return stdout.trim();
 }
 
+async function discoverFields(indexPattern = '*') {
+  const auth = buildCurlAuth();
+  const { stdout } = await execAsync(
+    `curl -s ${auth} "${ES_URL}/${indexPattern}/_mapping" | jq -r 'to_entries[] | .value.mappings.properties // {} | to_entries[] | "- \\(.key) (\\(.value.type // \\"object\\"))"' | sort -u`
+  );
+  return stdout.trim();
+}
+
+async function queryPreview(index, field, aggType = 'terms', timeRange = '15m') {
+  const auth = buildCurlAuth();
+  
+  let query;
+  if (aggType === 'date_histogram') {
+    query = {
+      size: 0,
+      query: { range: { '@timestamp': { gte: `now-${timeRange}`, lte: 'now' } } },
+      aggs: { data: { date_histogram: { field, fixed_interval: '1m' } } }
+    };
+  } else {
+    query = {
+      size: 0,
+      query: { range: { '@timestamp': { gte: `now-${timeRange}`, lte: 'now' } } },
+      aggs: { data: { [aggType]: { field, size: 10 } } }
+    };
+  }
+  
+  const { stdout } = await execAsync(
+    `curl -s ${auth} "${ES_URL}/${index}/_search" -H "Content-Type: application/json" -d '${JSON.stringify(query)}'`
+  );
+  
+  const result = JSON.parse(stdout);
+  if (result.error) {
+    throw new Error(result.error.reason || JSON.stringify(result.error));
+  }
+  
+  const total = result.hits?.total?.value || result.hits?.total || 0;
+  const buckets = result.aggregations?.data?.buckets || [];
+  
+  let output = `Total documents: ${total}\n\nPreview of results:\n`;
+  buckets.slice(0, 10).forEach(b => {
+    output += `  ${b.key_as_string || b.key}: ${b.doc_count} documents\n`;
+  });
+  if (buckets.length > 10) {
+    output += `  ... and ${buckets.length - 10} more\n`;
+  }
+  
+  return output;
+}
+
 async function generateDashboard(title, index, vizType, field, timeRange = '15m') {
+  const dataViewId = await getDataViewId(index);
   const dashId = `dash-${Date.now()}`;
   const vizId = `viz-${Date.now()}`;
   
@@ -44,7 +150,7 @@ async function generateDashboard(title, index, vizType, field, timeRange = '15m'
         aggs: [{ type: 'count', schema: 'metric' }]
       }),
       kibanaSavedObjectMeta: {
-        searchSourceJSON: JSON.stringify({ index, query: '*', filter: [] })
+        searchSourceJSON: JSON.stringify({ index: dataViewId, query: '*', filter: [] })
       }
     }
   };
@@ -71,14 +177,14 @@ async function createDashboard(dashId) {
   const vizFile = path.join(DATA_DIR, `${vizId}.json`);
   const dashFile = path.join(DATA_DIR, `${dashId}.json`);
   
-  const auth = Buffer.from(`${KIBANA_USER}:${KIBANA_PASSWORD}`).toString('base64');
+  const auth = buildKibanaCurlAuth();
   
   await execAsync(
-    `curl -s -X POST "${KIBANA_URL}/api/saved_objects/visualization/${vizId}" -H "kbn-xsrf: true" -H "Content-Type: application/json" -H "Authorization: Basic ${auth}" -d @"${vizFile}"`
+    `curl -s -X POST "${KIBANA_URL}/api/saved_objects/visualization/${vizId}" -H "kbn-xsrf: true" -H "Content-Type: application/json" ${auth} -d @"${vizFile}"`
   );
   
   await execAsync(
-    `curl -s -X POST "${KIBANA_URL}/api/saved_objects/dashboard/${dashId}" -H "kbn-xsrf: true" -H "Content-Type: application/json" -H "Authorization: Basic ${auth}" -d @"${dashFile}"`
+    `curl -s -X POST "${KIBANA_URL}/api/saved_objects/dashboard/${dashId}" -H "kbn-xsrf: true" -H "Content-Type: application/json" ${auth} -d @"${dashFile}"`
   );
   
   return `${KIBANA_URL}/app/dashboards#/view/${dashId}`;
@@ -120,7 +226,7 @@ async function checkAlerts() {
     
     const results = [];
     for (const alert of alerts.filter(a => a.enabled)) {
-      const auth = Buffer.from(`${ES_USER}:${ES_PASSWORD}`).toString('base64');
+      const auth = buildCurlAuth();
       const query = {
         size: 0,
         aggs: {
@@ -131,7 +237,7 @@ async function checkAlerts() {
       };
       
       const { stdout } = await execAsync(
-        `curl -s -H "Authorization: Basic ${auth}" -H "Content-Type: application/json" "${ES_URL}/${alert.index}/_search" -d '${JSON.stringify(query)}'`
+        `curl -s ${auth} -H "Content-Type: application/json" "${ES_URL}/${alert.index}/_search" -d '${JSON.stringify(query)}'`
       );
       
       const response = JSON.parse(stdout);
@@ -164,6 +270,28 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
+      name: 'list_indices',
+      description: 'List all Elasticsearch indices',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          pattern: { type: 'string', description: 'Index pattern (default: *)' }
+        }
+      }
+    },
+    {
+      name: 'create_data_view',
+      description: 'Create a Kibana data view (index pattern) for an index',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          index_pattern: { type: 'string', description: 'Index pattern name' },
+          time_field: { type: 'string', description: 'Time field name (default: @timestamp)', default: '@timestamp' }
+        },
+        required: ['index_pattern']
+      }
+    },
+    {
       name: 'discover_fields',
       description: 'List available fields in an Elasticsearch index',
       inputSchema: {
@@ -171,6 +299,20 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
         properties: {
           index_pattern: { type: 'string', description: 'Index pattern (default: *)' }
         }
+      }
+    },
+    {
+      name: 'query_preview',
+      description: 'Preview query results with aggregations',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          index: { type: 'string', description: 'Index name' },
+          field: { type: 'string', description: 'Field to aggregate' },
+          agg_type: { type: 'string', description: 'Aggregation type (terms/date_histogram)', default: 'terms' },
+          time_range: { type: 'string', description: 'Time range (e.g., 5m, 15m, 1h)', default: '15m' }
+        },
+        required: ['index', 'field']
       }
     },
     {
@@ -228,8 +370,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     
     let result;
     switch (name) {
+      case 'list_indices':
+        result = await listIndices(args.pattern);
+        break;
+      case 'create_data_view':
+        result = await createDataView(args.index_pattern, args.time_field);
+        break;
       case 'discover_fields':
         result = await discoverFields(args.index_pattern);
+        break;
+      case 'query_preview':
+        result = await queryPreview(args.index, args.field, args.agg_type, args.time_range);
         break;
       case 'generate_dashboard':
         result = await generateDashboard(args.title, args.index, args.viz_type, args.field, args.time_range);

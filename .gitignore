@@ -7,3 +7,6 @@ logs/*
 bin/*
 .kiro/data
 .env
+node_modules/
+.kiro/mcp-servers/node_modules/
+package-lock.json
