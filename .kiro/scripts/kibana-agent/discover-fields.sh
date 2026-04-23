@@ -9,7 +9,11 @@ INDEX_PATTERN="${1:-*}"
 
 [ -z "$ES_URL" ] && echo "Error: ES_URL not set" && exit 1
 
-RESPONSE=$(curl -s -u "$ES_USER:$ES_PASSWORD" "$ES_URL/$INDEX_PATTERN/_mapping" 2>&1)
+if [ -n "$ES_USER" ] && [ -n "$ES_PASSWORD" ]; then
+  RESPONSE=$(curl -s -u "$ES_USER:$ES_PASSWORD" "$ES_URL/$INDEX_PATTERN/_mapping" 2>&1)
+else
+  RESPONSE=$(curl -s "$ES_URL/$INDEX_PATTERN/_mapping" 2>&1)
+fi
 
 if echo "$RESPONSE" | grep -q "error"; then
   echo "Error querying Elasticsearch: $RESPONSE"

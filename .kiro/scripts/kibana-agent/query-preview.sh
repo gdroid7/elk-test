@@ -56,10 +56,16 @@ else
   }'
 fi
 
-RESULT=$(curl -s -u "$ES_USER:$ES_PASSWORD" \
-  "$ES_URL/$INDEX/_search" \
-  -H "Content-Type: application/json" \
-  -d "$QUERY")
+if [ -n "$ES_USER" ] && [ -n "$ES_PASSWORD" ]; then
+  RESULT=$(curl -s -u "$ES_USER:$ES_PASSWORD" \
+    "$ES_URL/$INDEX/_search" \
+    -H "Content-Type: application/json" \
+    -d "$QUERY")
+else
+  RESULT=$(curl -s "$ES_URL/$INDEX/_search" \
+    -H "Content-Type: application/json" \
+    -d "$QUERY")
+fi
 
 if echo "$RESULT" | grep -q "error"; then
   echo "Error querying Elasticsearch: $(echo "$RESULT" | jq -r '.error.reason // .error')"

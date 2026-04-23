@@ -6,3 +6,4 @@ logs/*.log
 logs/*
 bin/*
 .kiro/data
+.env
